@@ -14,7 +14,7 @@ const apiHistoryCache = new Map();
 const apiCache = new Map();
 
 // clear cache 
-const CACHE_STALE_TIME_IN_MINUTES = 1;
+const CACHE_STALE_TIME_IN_MINUTES = 10;
 const timeout = () => {
     setTimeout(function () {
         itemCache.clear();
