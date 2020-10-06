@@ -93,23 +93,13 @@ const getCommentWithKids = async (commentId) => {
     }
 }
 
-const getUsers = async (userIds) => {
-    const promises = [];
-    for (let index = 0; index < userIds.length; index++) {
-        promises.push(
-            getuserDetails(userIds[index])
-        );
-    }
-    await Promise.all(promises);
-}
-
 const getComments = async (comments, storyId) => {
     await Promise.all(comments.map(comment => getCommentWithKids(comment)));
 
     const topcomments = getTopCommentsByChildComments(itemCache, comments);
 
     // get users details only for the users in top comments to avoid unnecessary network calls
-    await getUsers(topcomments.map(cm => cm.by));
+    await Promise.all(topcomments.map(cm => getuserDetails(cm.by)));
 
     apiCache.set(storyId,
         topcomments.map((comment) => {
