@@ -4,7 +4,7 @@ const lodash = require('lodash');
 const { getTopStoriesByScore, getTopCommentsByChildComments } = require('../helper');
 
 
-// to cache all network cals
+// to cache all network calls
 const itemCache = new Map();
 
 // to cache all network cals
@@ -48,6 +48,7 @@ const getuserDetails = async (id) => {
     try {
         const itemResponse = await fetch(`https://hacker-news.firebaseio.com/v0/user/${id}.json`);
         userDetails = await itemResponse.json();
+        // 1 year  = 31536000000 miliseconds
         userDetails.age = (Date.now() - userDetails.created) / 31536000000;
         itemCache.set(id, userDetails);
     } catch (e) {
@@ -60,13 +61,10 @@ const storykeys = ['title', 'url', 'score', 'time', 'by'];
 const getStories = async () => {
     const res = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty');
     const stories = await res.json();
-    const promises = [];
-    for (let index = 0; index < stories.length; index++) {
-        promises.push(getItemDetails(stories[index]));
-    }
-    await Promise.all(promises);
+    await Promise.all(stories.map(story => getItemDetails(story)));
     const top = getTopStoriesByScore(itemCache);
     apiCache.set('topStories', top.map(story => lodash.pick(story, storykeys)));
+    // setting the history cahce uniquely whenever a new top story response is calculated
     apiHistoryCache.set('pastStories',
         lodash.uniq( [...(apiHistoryCache.get('pastStories') || []),
                  ...top.map(s => s.id)])
@@ -106,17 +104,11 @@ const getUsers = async (userIds) => {
 }
 
 const getComments = async (comments, storyId) => {
-    const promises = [];
-    for (let index = 0; index < comments.length; index++) {
-        promises.push(
-            getCommentWithKids(comments[index])
-        );
-    }
-    await Promise.all(promises);
+    await Promise.all(comments.map(comment => getCommentWithKids(comment)));
 
     const topcomments = getTopCommentsByChildComments(itemCache, comments);
 
-    // get users details only for the users in top comments
+    // get users details only for the users in top comments to avoid unnecessary network calls
     await getUsers(topcomments.map(cm => cm.by));
 
     apiCache.set(storyId,
@@ -132,8 +124,8 @@ const getComments = async (comments, storyId) => {
 
 const getTopComments = async (request, response) => {
     const { storyId } = request.params;
-    const storyComments = apiCache.get(Number(storyId));
-    if (!storyComments) {
+    // if the cache doesn't have comments for story then seek in HN API
+    if (!apiCache.get(Number(storyId))) {
         const storyDetails = await getItemDetails(Number(storyId));
         if (storyDetails.type !== 'story') {
             response.send('The requested id is not a story');
@@ -143,7 +135,7 @@ const getTopComments = async (request, response) => {
     response.send(apiCache.get(Number(storyId)));
 }
 
-
+// all supported APIs
 const router = express.Router();
 router.get('/top-stories', getTopStories);
 router.get('/comments/:storyId', getTopComments);
